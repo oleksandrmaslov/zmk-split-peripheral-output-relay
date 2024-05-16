@@ -27,7 +27,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/output/output_generic.h>
 #endif
 
-#if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 #if IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY)
 
 static struct zmk_split_bt_output_relay_event split_output_run_payload;
@@ -46,6 +45,7 @@ void peripheral_output_event_work_callback(struct k_work *work) {
             continue;
         }
 
+#if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
         const struct output_generic_api *api = (const struct output_generic_api *)output_dev->api;
         if (api->enable == NULL) {
             LOG_WRN("No enable() api assigned on device %s", output_dev->name);
@@ -57,6 +57,8 @@ void peripheral_output_event_work_callback(struct k_work *work) {
         } else {
             api->disable(output_dev);
         }
+#endif /* IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER) */
+
     }
 }
 
@@ -97,7 +99,6 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
 }
 
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY) */
-#endif /* IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER) */
 
 BT_GATT_SERVICE_DEFINE(
     or_split_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(ZMK_SPLIT_BT_OR_SERVICE_UUID)),
