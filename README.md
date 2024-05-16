@@ -26,9 +26,9 @@ manifest:
     # ...
 ```
 
-In below example config, a DRV2605 driven LRA (<&fb_lra0>) will be triggered on peripheral shield on key press `q`.
+In below config, a DRV2605 driven LRA (<&fb_lra0>) will be triggered on peripheral shield on key press `q`.
 
-Additional modules are used in this example config:
+Additional modules are used in below config:
 * [zmk-output-behavior-listener](https://github.com/badjeff/zmk-output-behavior-listener)
 * [zmk-drv2605-driver](https://github.com/badjeff/zmk-drv2605-driver)
 
