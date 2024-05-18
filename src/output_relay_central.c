@@ -351,12 +351,10 @@ int zmk_split_bt_invoke_output(const struct device *dev,
 
     struct zmk_split_bt_output_relay_event ev = (struct zmk_split_bt_output_relay_event){
         .relay_channel = relay_channel,
-        .state = event.state,
-        .force = event.force,
+        .value = event.value,
     };
 
-    LOG_DBG("Send output: rc-%d s-%s f-%d",
-        ev.relay_channel, ev.state?"y":"n", ev.force);
+    LOG_DBG("Send output: rc-%d v-%d", ev.relay_channel, ev.value);
 
     return split_bt_invoke_output(ev);
 }

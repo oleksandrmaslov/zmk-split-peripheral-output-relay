@@ -37,7 +37,7 @@ K_MSGQ_DEFINE(peripheral_output_event_msgq, sizeof(struct zmk_split_output_event
 void peripheral_output_event_work_callback(struct k_work *work) {
     struct zmk_split_output_event ev;
     while (k_msgq_get(&peripheral_output_event_msgq, &ev, K_NO_WAIT) == 0) {
-        LOG_DBG("Trigger output change: s-%s f-%d", ev.state?"y":"n", ev.force);
+        LOG_DBG("Trigger output change: v-%d", ev.value);
 
         const struct device *output_dev = ev.dev;
         if (!output_dev) {
@@ -46,17 +46,14 @@ void peripheral_output_event_work_callback(struct k_work *work) {
         }
 
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
+
         const struct output_generic_api *api = (const struct output_generic_api *)output_dev->api;
-        if (api->enable == NULL) {
+        if (api->set_value == NULL) {
             LOG_WRN("No enable() api assigned on device %s", output_dev->name);
             continue;
         }
+        api->set_value(output_dev, ev.value);
 
-        if (ev.state) {
-            api->enable(output_dev, ev.force);
-        } else {
-            api->disable(output_dev);
-        }
 #endif /* IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER) */
 
     }
@@ -86,11 +83,7 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
         return len;
     }
 
-    struct zmk_split_output_event ev = {
-        .dev = dev,
-        .state = payload->state,
-        .force = payload->force,
-    };
+    struct zmk_split_output_event ev = { .dev = dev, .value = payload->value };
 
     k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
     k_work_submit(&peripheral_output_event_work);
