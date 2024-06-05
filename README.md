@@ -6,9 +6,9 @@ This module add a output relay for ZMK. This is an add-on for [zmk-output-behavi
 
 This module sideload a new set of GATT Service and Characteratics into existing split bt paired connection. The new characteristics allow to transfer output event from central to peripherals with a relay-channel id. Then, output events would trigger output device(s) on peripheral(s).
 
-There is an extension module [zmk-split-peripheral-output-relay](https://github.com/badjeff/zmk-split-peripheral-output-relay) that proxies output to split peripherals  via bluetooth.
+There is an extension module that proxies output to split peripherals  via bluetooth.
 
-You might also want to checkout [this module](https://github.com/badjeff/zmk-split-peripheral-input-relay) that want opposite directional proxying for input.
+You might also want to checkout [this module](https://github.com/badjeff/zmk-split-peripheral-input-relay) that does opposite directional proxying for input.
 
 ## Installation
 
