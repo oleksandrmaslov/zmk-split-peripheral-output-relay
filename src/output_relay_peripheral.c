@@ -47,6 +47,9 @@ void peripheral_output_event_work_callback(struct k_work *work) {
 
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 
+        //** TODO: check if in_ev has payload bits
+        //         call either api->set_value, or api->set_payload
+
         const struct output_generic_api *api = (const struct output_generic_api *)output_dev->api;
         if (api->set_value == NULL) {
             LOG_WRN("No enable() api assigned on device %s", output_dev->name);
@@ -66,7 +69,7 @@ const struct device* virtual_output_device_get_for_relay_channel(uint8_t relay_c
 static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gatt_attr *attrs,
                                        const void *buf, uint16_t len, uint16_t offset,
                                        uint8_t flags) {
-    struct zmk_split_bt_output_relay_event *payload = attrs->user_data;
+    void *data = attrs->user_data;
     uint16_t end_addr = offset + len;
 
     LOG_DBG("offset %d len %d", offset, len);
@@ -75,15 +78,27 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
 
-    memcpy(payload + offset, buf, len);
+    //** TODO: check if len > 2, imply that attrs->user_data has payload bits
+    //         before casting to zmk_split_bt_output_relay_event
 
-    const struct device *dev = virtual_output_device_get_for_relay_channel(payload->relay_channel);
+    memcpy(data + offset, buf, len);
+
+    struct zmk_split_bt_output_relay_event *in_ev 
+            = (struct zmk_split_bt_output_relay_event *)data;
+
+    const struct device *dev = virtual_output_device_get_for_relay_channel(in_ev->relay_channel);
     if (dev == NULL) {
-        LOG_DBG("Unable to retrieve virtual device for channel: %d", payload->relay_channel);
+        LOG_DBG("Unable to retrieve virtual device for channel: %d", in_ev->relay_channel);
         return len;
     }
 
-    struct zmk_split_output_event ev = { .dev = dev, .value = payload->value };
+    //** TODO: check if in_ev has payload bits
+    //         direct pass payload_size and payload to zmk_split_output_event
+
+    struct zmk_split_output_event ev = {
+        .dev = dev,
+        .value = in_ev->value,
+    };
 
     k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
     k_work_submit(&peripheral_output_event_work);
