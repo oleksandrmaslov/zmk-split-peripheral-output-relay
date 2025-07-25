@@ -51,11 +51,11 @@ void peripheral_output_event_work_callback(struct k_work *work) {
         //         call either api->set_value, or api->set_payload
 
         const struct output_generic_api *api = (const struct output_generic_api *)output_dev->api;
-        if (api->set_value == NULL) {
-            LOG_WRN("No enable() api assigned on device %s", output_dev->name);
-            continue;
+        if (api->set_payload != NULL && ev.payload_len > 0) {
+            api->set_payload(output_dev, ev.payload, ev.payload_len);
+        } else if (api->set_value != NULL) {
+            api->set_value(output_dev, ev.value);
         }
-        api->set_value(output_dev, ev.value);
 
 #endif /* IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER) */
 
@@ -71,38 +71,25 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
                                        uint8_t flags) {
     void *data = attrs->user_data;
     uint16_t end_addr = offset + len;
-
     LOG_DBG("offset %d len %d", offset, len);
-
     if (end_addr > sizeof(struct zmk_split_bt_output_relay_event)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
-
-    //** TODO: check if len > 2, imply that attrs->user_data has payload bits
-    //         before casting to zmk_split_bt_output_relay_event
-
     memcpy(data + offset, buf, len);
-
-    struct zmk_split_bt_output_relay_event *in_ev 
-            = (struct zmk_split_bt_output_relay_event *)data;
-
+    struct zmk_split_bt_output_relay_event *in_ev = (struct zmk_split_bt_output_relay_event *)data;
     const struct device *dev = virtual_output_device_get_for_relay_channel(in_ev->relay_channel);
     if (dev == NULL) {
         LOG_DBG("Unable to retrieve virtual device for channel: %d", in_ev->relay_channel);
         return len;
     }
-
-    //** TODO: check if in_ev has payload bits
-    //         direct pass payload_size and payload to zmk_split_output_event
-
     struct zmk_split_output_event ev = {
         .dev = dev,
         .value = in_ev->value,
+        .payload_len = in_ev->payload_size,
     };
-
+    memcpy(ev.payload, in_ev->payload, in_ev->payload_size);
     k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
     k_work_submit(&peripheral_output_event_work);
-
     return len;
 }
 
