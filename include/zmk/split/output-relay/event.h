@@ -12,8 +12,8 @@ struct zmk_split_bt_output_relay_event {
 
     //** TODO: send payload_size & payload, only if size > 0
 
-    // uint8_t payload_size;
-    // void *payload;
+    uint8_t payload_size;
+    void *payload;
 
 } __packed;
 
@@ -23,8 +23,8 @@ struct zmk_split_output_event {
 
     //** TODO: send payload_size & payload, only if size > 0
 
-    // uint8_t payload_size;
-    // void *payload;
+    uint8_t payload_size;
+    void *payload;
 
 };
 
