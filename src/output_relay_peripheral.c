@@ -22,6 +22,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include <zmk/split/output-relay/uuid.h>
 #include <zmk/split/output-relay/event.h>
+#include <zmk/output/output_split_output_relay.h> // <-- добавлено
 
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 #include <zmk/output/output_generic.h>
@@ -44,20 +45,19 @@ void peripheral_output_event_work_callback(struct k_work *work) {
             LOG_WRN("No output device assigned");
             continue;
         }
-        
-#if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 
         const struct output_split_output_relay_api *api =
             (const struct output_split_output_relay_api *)output_dev->api;
 
-        if (api->set_payload != NULL && ev.payload_len > 0) {
-            api->set_payload(output_dev, ev.payload, ev.payload_len);
-        } else if (api->set_value != NULL) {
-            api->set_value(output_dev, ev.value);
+        if (ev.payload_len > 0) {
+            if (api->set_payload) {
+                api->set_payload(output_dev, ev.payload, ev.payload_len);
+            }
+        } else {
+            if (api->set_value) {
+                api->set_value(output_dev, ev.value);
+            }
         }
-
-#endif /* IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER) */
-
     }
 }
 
@@ -84,9 +84,9 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     struct zmk_split_output_event ev = {
         .dev = dev,
         .value = in_ev->value,
-        .payload_len = in_ev->payload_size,
+        .payload_len = in_ev->payload_size, // копируем размер
     };
-    memcpy(ev.payload, in_ev->payload, in_ev->payload_size);
+    memcpy(ev.payload, in_ev->payload, ev.payload_len); // копируем сами данные
     k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
     k_work_submit(&peripheral_output_event_work);
     return len;
