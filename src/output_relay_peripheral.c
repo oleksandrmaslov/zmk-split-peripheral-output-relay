@@ -44,13 +44,12 @@ void peripheral_output_event_work_callback(struct k_work *work) {
             LOG_WRN("No output device assigned");
             continue;
         }
-
+        
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 
-        //** TODO: check if in_ev has payload bits
-        //         call either api->set_value, or api->set_payload
+        const struct output_split_output_relay_api *api =
+            (const struct output_split_output_relay_api *)output_dev->api;
 
-        const struct output_generic_api *api = (const struct output_generic_api *)output_dev->api;
         if (api->set_payload != NULL && ev.payload_len > 0) {
             api->set_payload(output_dev, ev.payload, ev.payload_len);
         } else if (api->set_value != NULL) {
