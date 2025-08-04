@@ -362,10 +362,9 @@ int zmk_split_bt_invoke_output(const struct device *dev,
         return relay_channel;
     }
 
-    struct zmk_split_bt_output_relay_event ev = (struct zmk_split_bt_output_relay_event){
-        .relay_channel = relay_channel,
-        .value = event.value,
-    };
+    // Копируем всю структуру event, затем обновляем канал
+    struct zmk_split_bt_output_relay_event ev = event;
+    ev.relay_channel = relay_channel;
 
     LOG_DBG("Send output: rc-%d v-%d", ev.relay_channel, ev.value);
 
