@@ -6,6 +6,7 @@
 
 #define DT_DRV_COMPAT zmk_split_peripheral_output_relay
 
+#include <stddef.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/types.h>
 #include <zephyr/device.h>
@@ -13,6 +14,7 @@
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 
+#include <string.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/uuid.h>
@@ -299,7 +301,11 @@ void split_central_split_or_run_callback(struct k_work *work) {
     LOG_DBG("");
 
     while (k_msgq_get(&zmk_split_central_split_or_run_msgq, &event, K_NO_WAIT) == 0) {
-    
+        size_t payload_size =
+            MIN(event.payload_size, ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
+        size_t msg_len =
+            offsetof(struct zmk_split_bt_output_relay_event, payload) + payload_size;
+
         for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
             if (peripherals[i].state != PERIPHERAL_SLOT_STATE_CONNECTED) {
                 continue;
@@ -312,11 +318,14 @@ void split_central_split_or_run_callback(struct k_work *work) {
                 continue;
             }
 
-            //** TODO: append event.payload into buffer, only if payload_size > 0
+            if (event.payload_size != payload_size) {
+                LOG_WRN("Truncating payload from %u to %zu bytes", event.payload_size,
+                        payload_size);
+            }
 
             int err = bt_gatt_write_without_response(peripherals[i].conn,
                                                      peripherals[i].update_output_handler,
-                                                     &event, sizeof(event), true);
+                                                     &event, msg_len, true);
 
             if (err) {
                 LOG_ERR("Failed to write split output characteristic (err %d)", err);
@@ -362,12 +371,31 @@ int zmk_split_bt_invoke_output(const struct device *dev,
         return relay_channel;
     }
 
-    struct zmk_split_bt_output_relay_event ev = (struct zmk_split_bt_output_relay_event){
-        .relay_channel = relay_channel,
-        .value = event.value,
-    };
+    struct zmk_split_bt_output_relay_event ev = {0};
+    ev.relay_channel = relay_channel;
+    ev.value = event.value;
+    ev.payload_size =
+        MIN(event.payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
+    memcpy(ev.payload, event.payload, ev.payload_size);
 
-    LOG_DBG("Send output: rc-%d v-%d", ev.relay_channel, ev.value);
+    LOG_DBG("Send output: rc-%d v-%d payload-%u", ev.relay_channel, ev.value,
+            ev.payload_size);
+
+    return split_bt_invoke_output(ev);
+}
+
+int zmk_split_bt_invoke_output_channel(uint8_t relay_channel, uint8_t value,
+                                       const uint8_t *payload, uint8_t payload_size) {
+    struct zmk_split_bt_output_relay_event ev = {0};
+    ev.relay_channel = relay_channel;
+    ev.value = value;
+    ev.payload_size = MIN(payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
+    if (payload != NULL && ev.payload_size > 0) {
+        memcpy(ev.payload, payload, ev.payload_size);
+    }
+
+    LOG_DBG("Send output (direct): rc-%d v-%d payload-%u", ev.relay_channel, ev.value,
+            ev.payload_size);
 
     return split_bt_invoke_output(ev);
 }

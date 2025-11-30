@@ -13,3 +13,12 @@ config ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY
 config ZMK_SPLIT_SPLT_PERIPHERAL_OUTPUT_QUEUE_SIZE
     int "Max number of split peripheral output events to queue when received from central"
     default 5
+
+config ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD
+    int "Maximum payload size forwarded to split peripheral outputs"
+    default 32
+    range 0 244
+    help
+      Defines the maximum number of payload bytes carried with a split
+      peripheral output event. Keep this at or above your Raw HID report size
+      when forwarding Raw HID data to a peripheral display.

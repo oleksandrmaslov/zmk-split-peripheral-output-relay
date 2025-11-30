@@ -6,6 +6,7 @@
 
 #define DT_DRV_COMPAT zmk_split_peripheral_output_relay
 
+#include <string.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/types.h>
 #include <zephyr/device.h>
@@ -23,6 +24,10 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/split/output-relay/uuid.h>
 #include <zmk/split/output-relay/event.h>
 
+#if IS_ENABLED(CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL)
+#include <raw_hid/events.h>
+#endif
+
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 #include <zmk/output/output_generic.h>
 #endif
@@ -37,7 +42,7 @@ K_MSGQ_DEFINE(peripheral_output_event_msgq, sizeof(struct zmk_split_output_event
 void peripheral_output_event_work_callback(struct k_work *work) {
     struct zmk_split_output_event ev;
     while (k_msgq_get(&peripheral_output_event_msgq, &ev, K_NO_WAIT) == 0) {
-        LOG_DBG("Trigger output change: v-%d", ev.value);
+        LOG_DBG("Trigger output change: v-%d payload-%u", ev.value, ev.payload_size);
 
         const struct device *output_dev = ev.dev;
         if (!output_dev) {
@@ -86,6 +91,21 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     struct zmk_split_bt_output_relay_event *in_ev 
             = (struct zmk_split_bt_output_relay_event *)data;
 
+#if IS_ENABLED(CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL)
+    if (in_ev->relay_channel == CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL) {
+        uint8_t payload_size =
+            MIN(in_ev->payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
+        if (payload_size == 0) {
+            LOG_WRN("Raw HID relay received with empty payload");
+            return len;
+        }
+
+        raise_raw_hid_received_event(
+            (struct raw_hid_received_event){.data = in_ev->payload, .length = payload_size});
+        return len;
+    }
+#endif
+
     const struct device *dev = virtual_output_device_get_for_relay_channel(in_ev->relay_channel);
     if (dev == NULL) {
         LOG_DBG("Unable to retrieve virtual device for channel: %d", in_ev->relay_channel);
@@ -95,10 +115,12 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     //** TODO: check if in_ev has payload bits
     //         direct pass payload_size and payload to zmk_split_output_event
 
-    struct zmk_split_output_event ev = {
-        .dev = dev,
-        .value = in_ev->value,
-    };
+    struct zmk_split_output_event ev = {0};
+    ev.dev = dev;
+    ev.value = in_ev->value;
+    ev.payload_size =
+        MIN(in_ev->payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
+    memcpy(ev.payload, in_ev->payload, ev.payload_size);
 
     k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
     k_work_submit(&peripheral_output_event_work);
