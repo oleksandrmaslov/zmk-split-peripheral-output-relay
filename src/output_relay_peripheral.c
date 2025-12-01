@@ -24,9 +24,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/split/output-relay/uuid.h>
 #include <zmk/split/output-relay/event.h>
 
-#if IS_ENABLED(CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL)
 #include <raw_hid/events.h>
-#endif
 
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 #include <zmk/output/output_generic.h>
@@ -91,7 +89,6 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     struct zmk_split_bt_output_relay_event *in_ev 
             = (struct zmk_split_bt_output_relay_event *)data;
 
-#if IS_ENABLED(CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL)
     if (in_ev->relay_channel == CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL) {
         uint8_t payload_size =
             MIN(in_ev->payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
@@ -104,7 +101,6 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
             (struct raw_hid_received_event){.data = in_ev->payload, .length = payload_size});
         return len;
     }
-#endif
 
     const struct device *dev = virtual_output_device_get_for_relay_channel(in_ev->relay_channel);
     if (dev == NULL) {
