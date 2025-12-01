@@ -10,6 +10,10 @@ if (CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY)
     zephyr_library_sources(src/output_relay_peripheral.c)
   endif()
 
+  if (CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL)
+    zephyr_include_directories(${CMAKE_CURRENT_LIST_DIR}/../zmk-raw-hid/include)
+  endif()
+
   zephyr_include_directories(include)
 
   zephyr_include_directories(${APPLICATION_SOURCE_DIR}/include)
