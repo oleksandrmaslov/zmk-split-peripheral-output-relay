@@ -10,7 +10,8 @@ if (CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY)
     zephyr_library_sources(src/output_relay_peripheral.c)
   endif()
 
-  if (CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL)
+  # raw_hid headers are needed when relaying raw HID payloads; add path if present
+  if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../zmk-raw-hid/include")
     zephyr_include_directories(${CMAKE_CURRENT_LIST_DIR}/../zmk-raw-hid/include)
   endif()
 
