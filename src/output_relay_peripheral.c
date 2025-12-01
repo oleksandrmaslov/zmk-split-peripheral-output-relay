@@ -72,7 +72,7 @@ const struct device* virtual_output_device_get_for_relay_channel(uint8_t relay_c
 static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gatt_attr *attrs,
                                        const void *buf, uint16_t len, uint16_t offset,
                                        uint8_t flags) {
-    void *data = attrs->user_data;
+    uint8_t *data = attrs->user_data;
     uint16_t end_addr = offset + len;
 
     LOG_DBG("offset %d len %d", offset, len);
@@ -89,6 +89,7 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     struct zmk_split_bt_output_relay_event *in_ev 
             = (struct zmk_split_bt_output_relay_event *)data;
 
+#ifdef CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL
     if (in_ev->relay_channel == CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL) {
         uint8_t payload_size =
             MIN(in_ev->payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
@@ -101,6 +102,7 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
             (struct raw_hid_received_event){.data = in_ev->payload, .length = payload_size});
         return len;
     }
+#endif
 
     const struct device *dev = virtual_output_device_get_for_relay_channel(in_ev->relay_channel);
     if (dev == NULL) {
