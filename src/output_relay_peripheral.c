@@ -25,6 +25,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/split/output-relay/event.h>
 
 #include <raw_hid/events.h>
+#include <raw_hid/split.h>
 
 #if IS_ENABLED(CONFIG_ZMK_OUTPUT_BEHAVIOR_LISTENER)
 #include <zmk/output/output_generic.h>
@@ -33,6 +34,80 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #if IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY)
 
 static struct zmk_split_bt_output_relay_event split_output_run_payload;
+
+#ifdef CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL
+static uint8_t raw_hid_reassembly_buf[CONFIG_RAW_HID_REPORT_SIZE];
+static uint8_t raw_hid_reassembly_sequence;
+static uint8_t raw_hid_reassembly_total;
+static uint8_t raw_hid_reassembly_received;
+static bool raw_hid_reassembly_active;
+
+static void reset_raw_hid_reassembly(void) {
+    raw_hid_reassembly_sequence = 0;
+    raw_hid_reassembly_total = 0;
+    raw_hid_reassembly_received = 0;
+    raw_hid_reassembly_active = false;
+}
+
+static ssize_t handle_raw_hid_relay_payload(const struct zmk_split_bt_output_relay_event *in_ev,
+                                            uint8_t payload_size, uint16_t len) {
+    if (in_ev->value != RAW_HID_SPLIT_CHUNK_VALUE) {
+        if (payload_size == 0) {
+            LOG_WRN("Raw HID relay received with empty payload");
+            return len;
+        }
+
+        raise_raw_hid_received_event(
+            (struct raw_hid_received_event){.data = in_ev->payload, .length = payload_size});
+        return len;
+    }
+
+    if (payload_size <= RAW_HID_SPLIT_CHUNK_HEADER_SIZE) {
+        LOG_WRN("Raw HID chunk too short: %u", payload_size);
+        reset_raw_hid_reassembly();
+        return len;
+    }
+
+    const uint8_t sequence = in_ev->payload[0];
+    const uint8_t offset = in_ev->payload[1];
+    const uint8_t total = in_ev->payload[2];
+    const uint8_t chunk_len = payload_size - RAW_HID_SPLIT_CHUNK_HEADER_SIZE;
+
+    if (total == 0 || total > CONFIG_RAW_HID_REPORT_SIZE || offset + chunk_len > total) {
+        LOG_WRN("Invalid Raw HID chunk seq=%u offset=%u total=%u len=%u", sequence, offset,
+                total, chunk_len);
+        reset_raw_hid_reassembly();
+        return len;
+    }
+
+    if (offset == 0) {
+        reset_raw_hid_reassembly();
+        raw_hid_reassembly_sequence = sequence;
+        raw_hid_reassembly_total = total;
+        raw_hid_reassembly_active = true;
+    }
+
+    if (!raw_hid_reassembly_active || sequence != raw_hid_reassembly_sequence ||
+        total != raw_hid_reassembly_total || offset != raw_hid_reassembly_received) {
+        LOG_WRN("Out-of-order Raw HID chunk seq=%u offset=%u total=%u expected=%u", sequence,
+                offset, total, raw_hid_reassembly_received);
+        reset_raw_hid_reassembly();
+        return len;
+    }
+
+    memcpy(&raw_hid_reassembly_buf[offset],
+           &in_ev->payload[RAW_HID_SPLIT_CHUNK_HEADER_SIZE], chunk_len);
+    raw_hid_reassembly_received += chunk_len;
+
+    if (raw_hid_reassembly_received == raw_hid_reassembly_total) {
+        raise_raw_hid_received_event((struct raw_hid_received_event){
+            .data = raw_hid_reassembly_buf, .length = raw_hid_reassembly_total});
+        reset_raw_hid_reassembly();
+    }
+
+    return len;
+}
+#endif
 
 K_MSGQ_DEFINE(peripheral_output_event_msgq, sizeof(struct zmk_split_output_event),
               CONFIG_ZMK_SPLIT_SPLT_PERIPHERAL_OUTPUT_QUEUE_SIZE, 4);
@@ -93,14 +168,7 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     if (in_ev->relay_channel == CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL) {
         uint8_t payload_size =
             MIN(in_ev->payload_size, (uint8_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX);
-        if (payload_size == 0) {
-            LOG_WRN("Raw HID relay received with empty payload");
-            return len;
-        }
-
-        raise_raw_hid_received_event(
-            (struct raw_hid_received_event){.data = in_ev->payload, .length = payload_size});
-        return len;
+        return handle_raw_hid_relay_payload(in_ev, payload_size, len);
     }
 #endif
 
